@@ -25,21 +25,27 @@ public class XxlJobScheduler  {
         initI18n();
 
         // admin trigger pool start
+        // job 触发
         JobTriggerPoolHelper.toStart();
 
         // admin registry monitor run
+        // job 注册
         JobRegistryHelper.getInstance().start();
 
         // admin fail-monitor run
+        // job 失败监控
         JobFailMonitorHelper.getInstance().start();
 
         // admin lose-monitor run ( depend on JobTriggerPoolHelper )
+        // job 失去监控
         JobCompleteHelper.getInstance().start();
 
         // admin log report start
+        // job 日志报告
         JobLogReportHelper.getInstance().start();
 
         // start-schedule  ( depend on JobTriggerPoolHelper )
+        // job 调度
         JobScheduleHelper.getInstance().start();
 
         logger.info(">>>>>>>>> init xxl-job admin success.");

@@ -33,16 +33,34 @@ public class JobScheduleHelper {
     private Thread ringThread;
     private volatile boolean scheduleThreadToStop = false;
     private volatile boolean ringThreadToStop = false;
+
+    // 时间轮 每个槽位的时间间隔为1s
     private volatile static Map<Integer, List<Integer>> ringData = new ConcurrentHashMap<>();
 
     public void start(){
 
         // schedule thread
+        /**
+         * 调度线程，主要的作用是读取任务数据并且添加到时间轮中
+         * 调度逻辑是获取档期那时间+5s之内的任务，读取20个，然后根据这些任务的状态将这些任务添加到时间轮中
+         *      如果任务的被丢失了，并且已经超过了5s,那么就会根据任务配置时候的制定的策略决定这个任务是否执行
+         *      如果任务的延时还没超过5s,那么就会立即执行这个任务，并且将这个任务添加到时间轮中。
+         *      如果还没有到任务执行的时间，那么该任务会被直接添加到时间轮中
+         *
+         *
+         *
+         * TODO ：
+         * * 为什么丢失时间超过5s的任务不会被添加到时间轮中
+         * * 为什么执行过的任务还要被加到时间轮中
+         * * 为什么要做时间控制，如果我每秒有1000个任务，难道不会丢失很多任务嘛？？？？
+         * 
+         */
         scheduleThread = new Thread(new Runnable() {
             @Override
             public void run() {
 
                 try {
+                    //随机sleep 0-5s，避免集群大量任务同时触发
                     TimeUnit.MILLISECONDS.sleep(5000 - System.currentTimeMillis()%1000 );
                 } catch (InterruptedException e) {
                     if (!scheduleThreadToStop) {
@@ -77,6 +95,7 @@ public class JobScheduleHelper {
 
                         // 1、pre read
                         long nowTime = System.currentTimeMillis();
+                        // todo 查询orderbyId ????
                         List<XxlJobInfo> scheduleList = XxlJobAdminConfig.getAdminConfig().getXxlJobInfoDao().scheduleJobQuery(nowTime + PRE_READ_MS, preReadCount);
                         if (scheduleList!=null && scheduleList.size()>0) {
                             // 2、push time-ring
@@ -218,6 +237,13 @@ public class JobScheduleHelper {
 
 
         // ring thread
+        /**
+         * 时间轮线程：
+         * 该线程和上面的调度线程相当于是生产者和消费者的关系，调度线程向时间轮中添加任务，而时间轮线程负责消费这些任务
+         * 在时间轮消费线程一开始，有一个时间对齐的操作，这个操作是为了保证时间轮中的任务能够在整秒的时候执行
+         * 但是这样就会有一个问题，如果这个时间轮在一秒钟没有执完毕，就会跳过1s的时间，这也是在从时间轮中取任务执行的时候取了当前秒和前一秒的任务的原因
+         * 
+         */
         ringThread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -225,6 +251,7 @@ public class JobScheduleHelper {
                 while (!ringThreadToStop) {
 
                     // align second
+                    // 时间对其
                     try {
                         TimeUnit.MILLISECONDS.sleep(1000 - System.currentTimeMillis() % 1000);
                     } catch (InterruptedException e) {
@@ -269,6 +296,7 @@ public class JobScheduleHelper {
         ringThread.start();
     }
 
+    //计算任务下一次执行的时间
     private void refreshNextValidTime(XxlJobInfo jobInfo, Date fromTime) throws Exception {
         Date nextValidTime = generateNextValidTime(jobInfo, fromTime);
         if (nextValidTime != null) {
@@ -283,6 +311,7 @@ public class JobScheduleHelper {
         }
     }
 
+    // 将任务添加到时间轮中
     private void pushTimeRing(int ringSecond, int jobId){
         // push async ring
         List<Integer> ringItemData = ringData.get(ringSecond);
@@ -355,6 +384,7 @@ public class JobScheduleHelper {
 
 
     // ---------------------- tools ----------------------
+    // 真实计算任务下次执行的时间
     public static Date generateNextValidTime(XxlJobInfo jobInfo, Date fromTime) throws Exception {
         ScheduleTypeEnum scheduleTypeEnum = ScheduleTypeEnum.match(jobInfo.getScheduleType(), null);
         if (ScheduleTypeEnum.CRON == scheduleTypeEnum) {
