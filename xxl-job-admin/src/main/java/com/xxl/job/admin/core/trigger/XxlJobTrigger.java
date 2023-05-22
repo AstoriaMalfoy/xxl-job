@@ -21,6 +21,8 @@ import java.util.Date;
 /**
  * xxl-job trigger
  * Created by xuxueli on 17/7/13.
+ *
+ * 任务的触发器
  */
 public class XxlJobTrigger {
     private static Logger logger = LoggerFactory.getLogger(XxlJobTrigger.class);
@@ -51,19 +53,22 @@ public class XxlJobTrigger {
             logger.warn(">>>>>>>>>>>> trigger fail, jobId invalid，jobId={}", jobId);
             return;
         }
+        // 执行器任务参数
         if (executorParam != null) {
             jobInfo.setExecutorParam(executorParam);
         }
+
         int finalFailRetryCount = failRetryCount >= 0 ? failRetryCount : jobInfo.getExecutorFailRetryCount();
         XxlJobGroup group = XxlJobAdminConfig.getAdminConfig().getXxlJobGroupDao().load(jobInfo.getJobGroup());
 
         // cover addressList
+        // 如果手动提供了地址信息，覆盖地址数据
         if (addressList != null && addressList.trim().length() > 0) {
             group.setAddressType(1);
             group.setAddressList(addressList.trim());
         }
 
-        // sharding param
+        // sharding param   分片参数 两个整数，用/分割  todo 暂时不知道干什么用的
         int[] shardingParam = null;
         if (executorShardingParam != null) {
             String[] shardingArr = executorShardingParam.split("/");
@@ -73,16 +78,20 @@ public class XxlJobTrigger {
                 shardingParam[1] = Integer.valueOf(shardingArr[1]);
             }
         }
+        // 广播类型：如果任务类型广播类型，并且执行地址不为空，分片参数为空，则全部地址都执行一遍
         if (ExecutorRouteStrategyEnum.SHARDING_BROADCAST == ExecutorRouteStrategyEnum.match(jobInfo.getExecutorRouteStrategy(), null)
                 && group.getRegistryList() != null && !group.getRegistryList().isEmpty()
                 && shardingParam == null) {
             for (int i = 0; i < group.getRegistryList().size(); i++) {
+                // 提交执行
                 processTrigger(group, jobInfo, finalFailRetryCount, triggerType, i, group.getRegistryList().size());
             }
         } else {
+            // 如果分片参数为空，则设置为0，1
             if (shardingParam == null) {
                 shardingParam = new int[]{0, 1};
             }
+            // 提交执行
             processTrigger(group, jobInfo, finalFailRetryCount, triggerType, shardingParam[0], shardingParam[1]);
         }
 
@@ -106,14 +115,24 @@ public class XxlJobTrigger {
      * @param total               sharding index
      */
     // 执行
-    private static void processTrigger(XxlJobGroup group, XxlJobInfo jobInfo, int finalFailRetryCount, TriggerTypeEnum triggerType, int index, int total) {
+    private static void processTrigger(
+            XxlJobGroup group,                      //执行器组信息
+            XxlJobInfo jobInfo,                     // job信息
+            int finalFailRetryCount,                // 失败重试总数
+            TriggerTypeEnum triggerType,            // 触发器类型
+            int index,                              // 分片索引
+            int total                               // 分片总数
+    ) {
 
         // param
+        // 执行器阻塞策略
         ExecutorBlockStrategyEnum blockStrategy = ExecutorBlockStrategyEnum.match(jobInfo.getExecutorBlockStrategy(), ExecutorBlockStrategyEnum.SERIAL_EXECUTION);  // block strategy
+        // 执行器路由策略
         ExecutorRouteStrategyEnum executorRouteStrategyEnum = ExecutorRouteStrategyEnum.match(jobInfo.getExecutorRouteStrategy(), null);    // route strategy
+
         String shardingParam = (ExecutorRouteStrategyEnum.SHARDING_BROADCAST == executorRouteStrategyEnum) ? String.valueOf(index).concat("/").concat(String.valueOf(total)) : null;
 
-        // 1、save log-id
+        // 记录日志信息
         XxlJobLog jobLog = new XxlJobLog();
         jobLog.setJobGroup(jobInfo.getJobGroup());
         jobLog.setJobId(jobInfo.getId());
@@ -139,6 +158,7 @@ public class XxlJobTrigger {
         // 3、init address
         String address = null;
         ReturnT<String> routeAddressResult = null;
+        // 获取路由地址
         if (group.getRegistryList() != null && !group.getRegistryList().isEmpty()) {
             if (ExecutorRouteStrategyEnum.SHARDING_BROADCAST == executorRouteStrategyEnum) {
                 if (index < group.getRegistryList().size()) {
@@ -152,13 +172,16 @@ public class XxlJobTrigger {
                     address = routeAddressResult.getContent();
                 }
             }
-        } else {
+        }
+        else {
             routeAddressResult = new ReturnT<String>(ReturnT.FAIL_CODE, I18nUtil.getString("jobconf_trigger_address_empty"));
         }
 
+        // 任务执行
         // 4、trigger remote executor
         ReturnT<String> triggerResult = null;
         if (address != null) {
+            // 执行任务需要提供两个参数，一个是任务参数，一个是地址参数
             triggerResult = runExecutor(triggerParam, address);
         } else {
             triggerResult = new ReturnT<String>(ReturnT.FAIL_CODE, null);

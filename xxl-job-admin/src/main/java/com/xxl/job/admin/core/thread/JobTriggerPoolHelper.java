@@ -25,6 +25,12 @@ public class JobTriggerPoolHelper {
     private ThreadPoolExecutor slowTriggerPool = null;
 
     public void start(){
+        /**
+         * job执行器
+         * 定义了两个执行器，一个是快速执行器，一个是慢速执行器
+         * 这两个执行器的区别是，两个线程池中的最大线程数量不同，快速执行器的最大线程数量为100，慢速执行器的最大线程数量为200
+         * 阻塞队列长度也不同，快速执行器的阻塞队列长度为1000，慢速执行器的阻塞队列长度为2000
+         */
         fastTriggerPool = new ThreadPoolExecutor(
                 10,
                 XxlJobAdminConfig.getAdminConfig().getTriggerPoolFastMax(),

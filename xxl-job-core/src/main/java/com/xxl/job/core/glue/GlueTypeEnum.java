@@ -39,7 +39,7 @@ public enum GlueTypeEnum {
 
     public String getSuffix() {
         return suffix;
-    }
+    }                                                                                                                           
 
     public static GlueTypeEnum match(String name){
         for (GlueTypeEnum item: GlueTypeEnum.values()) {
