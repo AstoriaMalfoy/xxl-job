@@ -182,12 +182,13 @@ public class XxlJobTrigger {
         ReturnT<String> triggerResult = null;
         if (address != null) {
             // 执行任务需要提供两个参数，一个是任务参数，一个是地址参数
+            // 此处直接调用客户端执行，通信协议使用的是HTTP请求
             triggerResult = runExecutor(triggerParam, address);
         } else {
             triggerResult = new ReturnT<String>(ReturnT.FAIL_CODE, null);
         }
 
-        // 5、collection trigger info
+        // 保存执行日志信息
         StringBuffer triggerMsgSb = new StringBuffer();
         triggerMsgSb.append(I18nUtil.getString("jobconf_trigger_type")).append("：").append(triggerType.getTitle());
         triggerMsgSb.append("<br>").append(I18nUtil.getString("jobconf_trigger_admin_adress")).append("：").append(IpUtil.getIp());

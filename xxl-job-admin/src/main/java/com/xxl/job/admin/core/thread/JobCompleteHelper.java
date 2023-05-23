@@ -34,6 +34,7 @@ public class JobCompleteHelper {
 	private volatile boolean toStop = false;
 	public void start(){
 
+		// 回调线程池
 		// for callback
 		callbackThreadPool = new ThreadPoolExecutor(
 				2,
@@ -56,7 +57,14 @@ public class JobCompleteHelper {
 				});
 
 
+
+
+
 		// for monitor
+		/**
+		 * 监控线程池，如果任务处于执行中的状态已经10分钟，并且在任务注册信息中没有查询到任务注册数据
+		 * 则认为该任务已经丢失，记录任务的失败数据
+		 */
 		monitorThread = new Thread(new Runnable() {
 
 			@Override
@@ -88,6 +96,7 @@ public class JobCompleteHelper {
 								jobLog.setHandleCode(ReturnT.FAIL_CODE);
 								jobLog.setHandleMsg( I18nUtil.getString("joblog_lost_fail") );
 
+								// 结束任务 ，记录失败日志
 								XxlJobCompleter.updateHandleInfoAndFinish(jobLog);
 							}
 
@@ -135,6 +144,12 @@ public class JobCompleteHelper {
 
 	// ---------------------- helper ----------------------
 
+	/**
+	 * 回调方法
+	 * 回调方法会使用回调线程池中的一个线程来执行
+	 * @param callbackParamList
+	 * @return
+	 */
 	public ReturnT<String> callback(List<HandleCallbackParam> callbackParamList) {
 
 		callbackThreadPool.execute(new Runnable() {

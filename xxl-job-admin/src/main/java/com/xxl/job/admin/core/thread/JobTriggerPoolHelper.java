@@ -85,11 +85,13 @@ public class JobTriggerPoolHelper {
         // choose thread pool
         ThreadPoolExecutor triggerPool_ = fastTriggerPool;
         AtomicInteger jobTimeoutCount = jobTimeoutCountMap.get(jobId);
+        // 根据Job执行的时间选择具体的执行策略
         if (jobTimeoutCount!=null && jobTimeoutCount.get() > 10) {      // job-timeout 10 times in 1 min
             triggerPool_ = slowTriggerPool;
         }
 
         // trigger
+        // 在线程池中执行调度逻辑，负责参数组装，分片选择，调度器执行等逻辑
         triggerPool_.execute(() -> {
 
             long start = System.currentTimeMillis();
